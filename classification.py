@@ -23,10 +23,9 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 # keras
-from keras.models import Sequential
-from keras.layers.core import Dense, Activation
-from keras.utils import np_utils
-from keras.wrappers.scikit_learn import KerasClassifier
+from tensorflow import keras
+from tensorflow.keras import layers
+from tensorflow.keras.wrappers.scikit_learn import KerasClassifier
 
 
 # Data viz
@@ -123,17 +122,14 @@ def knn_prediction(X_train, X_test, t_train, t_test):
 
 
 def neural_network_classifier(X_train, X_test, t_train, t_test):
-    '''4 features in the input layer (the four flower measurements), 3 classes in the ouput layer
-    (corresponding to the 3 species), and 16 hidden units because
-    (from the point of view of a GPU, 16 is a round number!)'''
     # Function to create model, required for KerasClassifier
     def create_model():
         # create model
-        model = Sequential()
-        model.add(Dense(10, input_shape=(4,), activation='tanh'))
-        model.add(Dense(8, activation='tanh'))
-        model.add(Dense(6, activation='tanh'))
-        model.add(Dense(3, activation='softmax'))
+        model = keras.Sequential()
+        model.add(layers.Dense(16, input_shape=(4,), activation='tanh'))
+        model.add(layers.Dense(8, activation='tanh'))
+        model.add(layers.Dense(4, activation='tanh'))
+        model.add(layers.Dense(3, activation='softmax'))
         model.compile(loss='categorical_crossentropy',
                       optimizer='adam', metrics=['accuracy'])
         return model
@@ -152,7 +148,7 @@ def neural_network_classifier(X_train, X_test, t_train, t_test):
                       scoring=scoring, cv=k_fold, n_jobs=-1)
     gs.fit(X_train, t_train)
 
-    print(gs.best_estimator_)
+    print(gs.best_params_)
     use_model(gs, gs.best_score_, X_train, X_test,
               t_test, 'Neural Net Classification')
 
@@ -165,24 +161,33 @@ def use_model(model, val_acc, x_train, x_test, t_test, name):
     print('Training Performance')
     print(f'-> Acc: {val_acc}')
 
+    score = accuracy_score(t_test, model.predict(x_test))
     print('Testing Performance')
-    print(f'-> Acc: {accuracy_score(t_test, model.predict(x_test))}')
+    print(f'-> Acc: {score}')
     print()
 
     print('Report')
-    evaluate_model(t_test, model.predict(x_test))
+    evaluate_model(t_test, model.predict(x_test), score, name)
     print()
 
 
-def evaluate_model(t_test, t_pred):
-    print(confusion_matrix(t_test, t_pred))
+def evaluate_model(t_test, t_pred, score, name=None):
+    cm = confusion_matrix(t_test, t_pred)
+    # confusion_plot(cm, score, name)
     print(classification_report(t_test, t_pred))
 
 
-def one_hot_encode_object_array(arr):
-    '''One hot encode a numpy array of objects (e.g. strings)'''
-    uniques, ids = np.unique(arr, return_inverse=True)
-    return np_utils.to_categorical(ids, len(uniques))
+def confusion_plot(cm, score, name=None):
+    plt.figure(figsize=(N_class, N_class))
+    sns.heatmap(cm, annot=True, fmt=".3f", linewidths=.5,
+                square=True, cmap='Blues_r')
+    plt.ylabel('Actual label')
+    plt.xlabel('Predicted label')
+    all_sample_title = f'Accuracy Score: {score}'
+    plt.title(all_sample_title, size=12, pad=8)
+    name = '_'.join(name.split()).lower()
+    plt.savefig(f'{name}_accuracy_score.png',
+                bbox_inches='tight')
 
 
 ##############################
@@ -194,7 +199,7 @@ batch_size = 10    # batch size
 MaxIter = 100        # Maximum iteration
 decay = 0.          # weight decay
 
-random_seed = 314
+random_seed = 0
 scoring = 'accuracy'
 
 X, t = read_iris_data()
@@ -203,9 +208,11 @@ X, t = read_iris_data()
 # print("X, t")
 # print(X.shape, t.shape)
 
-X_scaled = StandardScaler().fit_transform(X)
 X_train, X_test, t_train, t_test = train_test_split(
-    X_scaled, t, test_size=0.33, random_state=random_seed, stratify=t)
+    X, t, test_size=0.33, random_state=random_seed, stratify=t)
+
+X_train_scaled = StandardScaler().fit_transform(X_train)
+X_test_scaled = StandardScaler().fit_transform(X_test)
 
 print('There are {} samples in the training set and {} samples in the test set'.format(
     X_train.shape[0], X_test.shape[0]))
@@ -216,13 +223,15 @@ print()
 
 
 # Baseline - Majority guess
-baseline_prediction(X_train, X_test, t_train, t_test)
+baseline_prediction(X_train_scaled, X_test_scaled, t_train, t_test)
 
 # Linear Classifier
-logistic_regression_prediction(X_train, X_test, t_train, t_test)
+logistic_regression_prediction(
+    X_train_scaled, X_test_scaled, t_train, t_test)
 
 # Non-linear Classifiers
-naive_bayes_prediction(X_train, X_test, t_train, t_test)
-svm_prediction(X_train, X_test, t_train, t_test)
-knn_prediction(X_train, X_test, t_train, t_test)  # non parametric
+naive_bayes_prediction(X_train_scaled, X_test_scaled, t_train, t_test)
+svm_prediction(X_train_scaled, X_test_scaled, t_train, t_test)
+knn_prediction(X_train_scaled, X_test_scaled,
+               t_train, t_test)  # non parametric
 neural_network_classifier(X_train, X_test, t_train, t_test)
